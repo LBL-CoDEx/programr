@@ -1,0 +1,13 @@
+#!/bin/bash
+
+if [ ! "$PROGRAMR" ]; then
+  echo "Variable 'PROGRAMR' must point to ProgrAMR directory."
+  exit 1
+fi
+
+cxx_flags="${cxx_flags:-[]}"
+cc_flags="${cxx_flags:-[]}"
+ld_flags_0="${ld_flags_0:-[]}"
+ld_flags_1="${ld_flags_1:-[]}"
+
+makeout="${PROGRAMR}/.makeout"

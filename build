@@ -1,0 +1,88 @@
+#!/bin/bash
+
+# This will build and return an absolute path to the executable in stdout
+
+# command line:
+#   ./build <path to app's cxx>
+
+# command environment variables:
+#   symbols=[0|1] -- include debug symbols
+#   optimize=[0|1|2|3...] -- optimization level
+#   gprof=[0|1] -- enable profiling with gprof
+#   conduit=[mpi|ibv|...]
+
+# examples:
+#   ./build app/fib.cxx
+
+here="$(cd "$(dirname "$0")"; pwd -P)"
+source "${here}/defaults"
+
+roots=("${@:1}")
+rootlist=""
+for i in "${!roots[@]}"; do
+  rootlist+=\"$(python -c "import os; import sys; sys.stdout.write(os.path.realpath('${roots[$i]}'))")\",
+done
+
+cxx_flags+="+['-Wall']"
+cc_flags+="+['-Wall']"
+
+case "${symbols}" in
+''|0)
+  ;;
+*)
+  cxx_flags+="+['-g']"
+  cc_flags+="+['-g']"
+  ;;
+esac
+
+optimize="${optimize:-2}"
+cxx_flags+="+['-O${optimize}']"
+cc_flags+="+['-O${optimize}']"
+
+case "${gprof}" in
+''|0)
+  ;;
+*)
+  cxx_flags+="+['-pg']"
+  cc_flags+="+['-pg']"
+  ld_flags_1+="+['-pg']"
+  ;;
+esac
+
+cxx_flags+="+['-iquote./src']"
+cc_flags+="+['-iquote./src']"
+
+cxx_flags+="+['-D__PROGRAMR__']"
+cc_flags+="+['-D__PROGRAMR__']"
+
+rm -f "${makeout}"
+exe=$(
+  cd "$PROGRAMR";
+  (
+    {
+      python<<END_HERE
+import sys
+vars = {
+  'cxx_flags': ${cxx_flags},
+  'cc_flags': ${cc_flags},
+  'ld_flags_0': ${ld_flags_0},
+  'ld_flags_1': ${ld_flags_1},
+}
+execfile('build_config.py', vars, vars)
+vars['roots'] = [${rootlist}]
+sys.path = ['./bake'] + sys.path
+execfile('bake/build.py', vars, vars)
+END_HERE
+    } 3>&1 1>&2 2>&3 | tee "$makeout";
+    
+    ec="${PIPESTATUS[0]}";
+    [ $ec -eq 0 ] && rm -f "$makeout"
+  ) 3>&1 1>&2 2>&3
+)
+
+if [ -e "${makeout}" ]; then
+  less "${makeout}"
+  exit 1
+fi
+
+echo "${exe}"

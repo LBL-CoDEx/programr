@@ -1,0 +1,6 @@
+.*.swp
+*.pyc
+.oven
+output
+mapper_stats_test.tsv
+mapper_stats_train.tsv

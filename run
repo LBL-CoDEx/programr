@@ -1,0 +1,81 @@
+#!/bin/bash
+
+# This will build and run a given source file with given args.
+
+# command line:
+#   ./run <path to app's cxx> <args...>
+
+# command environment variables:
+#   vm=[|gdb|valgrind|vgdb|gprof]
+#   n=[1|2...] -- number of ranks
+#   debug=[0|1] -- set PROGRAMR_KNOB_DEBUG
+#   also see: ./build
+
+# examples:
+#   ./run app/fib.cxx
+#   vm=gdb ./run app/fib.cxx
+
+here="$(cd "$(dirname "$0")"; pwd -P)"
+source "${here}/defaults"
+
+app_root="$1"
+exe_args="${@:2}"
+
+case "${vm}" in
+gdb)
+  run="gdb --args \"\${exe}\" \${exe_args}"
+  export symbols=1
+  export optimize="${optimize:-0}"
+  ;;
+valgrind)
+  run="valgrind --leak-check=full \"\${exe}\" \${exe_args}"
+  export symbols=1
+  export optimize="${optimize:-2}"
+  export PROGRAMR_KNOB_VALGRINDING=1
+  ;;
+massif)
+  run="valgrind --tool=massif \"\${exe}\" \${exe_args}"
+  export symbols=1
+  export optimize="${optimize:-2}"
+  export PROGRAMR_KNOB_VALGRINDING=1
+  ;;
+vgdb)
+  run="valgrind --vgdb=yes --vgdb-error=0 \"\${exe}\" \${exe_args} &\
+    ((echo 'target remote|vgdb';cat)|gdb --args \"\${exe}\");\
+    vgdb v.kill"
+  export symbols=1
+  export optimize="${optimize:-0}"
+  export PROGRAMR_KNOB_VALGRINDING=1
+  ;;
+gprof)
+  run="\"\${exe}\" \${exe_args} && gprof \"\${exe}\" gmon.out | less"
+  export gprof=1
+  export symbols=1
+  export optimize="${optimize:-2}"
+  ;;
+*)
+  run="\"\${exe}\" \${exe_args}"
+  ;;
+esac
+
+export PROGRAMR_KNOB_DEBUG="${debug:-1}"
+
+# build
+exe=$("${PROGRAMR}/build" "${app_root}" "${PROGRAMR}/src/main.cxx")
+ec=$?
+
+if [ "$ec" -ne 0 ]; then
+  if [ -e "${makeout}" ]; then
+    less "${makeout}"
+  fi
+  exit $ec
+fi
+
+case "${vm}" in
+time)
+  run="/usr/bin/time -v ${run}"
+  ;;
+esac
+
+eval "echo \"${run}\""
+eval "${run}"
